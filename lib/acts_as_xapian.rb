@@ -245,9 +245,9 @@ module ActsAsXapian
             
             self.runtime += Benchmark::realtime {
                 offset = options[:offset] || 0; offset = offset.to_i
-                limit = options[:limit]
-                raise "please specifiy maximum number of results to return with parameter :limit" if not limit
-                limit = limit.to_i 
+                limit = options[:limit] || -1
+                #raise "please specifiy maximum number of results to return with parameter :limit" if not limit
+                limit = limit.to_i
                 sort_by_prefix = options[:sort_by_prefix] || nil
                 sort_by_ascending = options[:sort_by_ascending].nil? ? true : options[:sort_by_ascending]
                 collapse_by_prefix = options[:collapse_by_prefix] || nil
@@ -683,8 +683,29 @@ module ActsAsXapian
                 job.save!
             end
         end
-     end
-
+    end
+    
+    module ClassMethods
+      
+      # Model.find_with_xapian("Search Term OR Phrase")
+      # => Array of Records
+      #
+      # this can be used through association proxies /!\ MAGIC /!\
+      # example:
+      # @document = Document.find(params[:id])
+      # @document_pages = @document.pages.find_with_xapian("Search Term OR Phrase")
+      #
+      # as seen here: http://pastie.org/270114
+      # improved with .compact by Overbryd, because there where some nil elements in the array
+      def find_with_xapian(search_term, options = {})
+        ActsAsXapian::Search.new([self], search_term, options).results.collect{|x| x[:model]}.compact
+      end
+      
+      def xapian?
+        self.included_modules.include?(InstanceMethods)
+      end
+    end
+    
     ######################################################################
     # Main entry point, add acts_as_xapian to your model.
     
@@ -692,12 +713,11 @@ module ActsAsXapian
         # See top of this file for docs
         def acts_as_xapian(options)
             # Give error only on queries if bindings not available
-            if not ActsAsXapian.bindings_available
-                return
-            end
+            return unless ActsAsXapian.bindings_available
 
             include InstanceMethods
-
+            extend ClassMethods
+            
             cattr_accessor :xapian_options
             self.xapian_options = options
 
