@@ -690,20 +690,37 @@ module ActsAsXapian
       # Model.find_with_xapian("Search Term OR Phrase")
       # => Array of Records
       #
-      # this can be used through association proxies /!\ MAGIC /!\
+      # this can be used through association proxies /!\ DANGEROUS MAGIC /!\
       # example:
       # @document = Document.find(params[:id])
-      # @document_pages = @document.pages.find_with_xapian("Search Term OR Phrase")
+      # @document_pages = @document.pages.find_with_xapian("Search Term OR Phrase").compact # NOTE THE compact wich removes nil objects from the array
       #
       # as seen here: http://pastie.org/270114
-      # improved with .compact by Overbryd, because there where some nil elements in the array
       def find_with_xapian(search_term, options = {})
-        ActsAsXapian::Search.new([self], search_term, options).results.collect{|x| x[:model]}.compact
+        search_with_xapian(search_term, options).results.collect{|x| x[:model]}
       end
       
-      def xapian?
-        self.included_modules.include?(InstanceMethods)
+      def search_with_xapian(search_term, options = {})
+        ActsAsXapian::Search.new([self], search_term, options)
       end
+      
+      #this method should return true if the integration of xapian on self is complete
+      def xapian?
+        self.included_modules.include?(InstanceMethods) && self.extended_by.include?(ClassMethods)
+      end
+      
+    end
+    
+    module ProxyFinder
+      
+      def find_with_xapian(search_term, options = {})
+        search_with_xapian(search_term, options).results.collect{|x| x[:model]}
+      end
+      
+      def search_with_xapian(search_term, options = {})
+        ActsAsXapian::Search.new([proxy_reflection.klass], "#{proxy_reflection.primary_key_name}:#{proxy_owner.id} #{search_term}", options)
+      end
+      
     end
     
     ######################################################################
@@ -717,6 +734,31 @@ module ActsAsXapian
 
             include InstanceMethods
             extend ClassMethods
+            
+            # extend has_many && has_many_and_belongs_to associations with our ProxyFinder to get scoped results
+            # I've written a small report in the discussion group why this is the proper way of doing this.
+            # see here: XXX - write it you lazy douche bag!
+            self.reflections.each do |association_name, r|
+              # skip if the associated model isn't indexed by acts_as_xapian
+              next unless r.klass.respond_to?(:xapian?) && r.klass.xapian?
+              # skip all associations except ham and habtm
+              next unless [:has_many, :has_many_and_belongs_to_many].include?(r.macro)
+  
+              # XXX todo:
+              # extend the associated model xapian options with this term:
+              # [proxy_reflection.primary_key_name.to_sym, <magically find a free capital letter>, proxy_reflection.primary_key_name]
+              # otherways this assumes that the associated & indexed model indexes this kind of term
+              
+              # but before you do the above, rewrite the options syntax... wich imho is actually very ugly
+              
+              # XXX test this nifty feature on habtm!
+              
+              if r.options[:extend].nil?
+                r.options[:extend] = [ProxyFinder]
+              elsif not r.options[:extend].include?(ProxyFinder)
+                r.options[:extend] << ProxyFinder
+              end
+            end
             
             cattr_accessor :xapian_options
             self.xapian_options = options
