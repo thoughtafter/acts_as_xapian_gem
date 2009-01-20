@@ -155,7 +155,7 @@ module ActsAsXapian
             @@query_parser.add_boolean_prefix("modelid", "I")
             if options[:terms]
               for term in options[:terms]
-                  raise "Use a single capital letter for term code" if not term[1].match(/^[A-Z]$/)
+                  raise "Use up to 3 single capital letters for term code" if not term[1].match(/^[A-Z]{1,3}$/)
                   raise "M and I are reserved for use as the model/id term" if term[1] == "M" or term[1] == "I"
                   raise "model and modelid are reserved for use as the model/id prefixes" if term[2] == "model" or term[2] == "modelid"
                   raise "Z is reserved for stemming terms" if term[1] == "Z"
