@@ -245,9 +245,9 @@ module ActsAsXapian
             
             self.runtime += Benchmark::realtime {
                 offset = options[:offset] || 0; offset = offset.to_i
-                limit = options[:limit] || -1
+                @limit = options[:limit] || -1
                 #raise "please specifiy maximum number of results to return with parameter :limit" if not limit
-                limit = limit.to_i
+                @limit = @limit.to_i
                 sort_by_prefix = options[:sort_by_prefix] || nil
                 sort_by_ascending = options[:sort_by_ascending].nil? ? true : options[:sort_by_ascending]
                 collapse_by_prefix = options[:collapse_by_prefix] || nil
@@ -269,7 +269,7 @@ module ActsAsXapian
                     ActsAsXapian.enquire.collapse_key = value
                 end
 
-                self.matches = ActsAsXapian.enquire.mset(offset, limit, 100)
+                self.matches = ActsAsXapian.enquire.mset(offset, @limit, 100)
                 self.cached_results = nil
             }
         end
