@@ -125,10 +125,7 @@ module ActsAsXapian
     @@values_by_prefix = {}
     @@value_ranges_store = []
 
-    @@init_values.each do |init_value_pair|
-      classname = init_value_pair[0]
-      options = init_value_pair[1]
-
+    @@init_values.each do |(classname, options)|
       # go through the various field types, and tell query parser about them,
       # and error check them - i.e. check for consistency between models
       @@query_parser.add_boolean_prefix("model", "M")
@@ -138,22 +135,23 @@ module ActsAsXapian
         raise "M and I are reserved for use as the model/id term" if term[1] == "M" || term[1] == "I"
         raise "model and modelid are reserved for use as the model/id prefixes" if term[2] == "model" || term[2] == "modelid"
         raise "Z is reserved for stemming terms" if term[1] == "Z"
-        raise "Already have code '#{term[1]}' in another model but with different prefix '#{@@terms_by_capital[term[1]]}'" if @@terms_by_capital.include?(term[1]) && @@terms_by_capital[term[1]] != term[2]
+        raise "Already have code '#{term[1]}' in another model but with different prefix '#{@@terms_by_capital[term[1]]}'" if @@terms_by_capital.key?(term[1]) && @@terms_by_capital[term[1]] != term[2]
         @@terms_by_capital[term[1]] = term[2]
         @@query_parser.add_prefix(term[2], term[1])
       end
       (options[:values] || []).each do |value|
         raise "Value index '#{value[1]}' must be an integer, is #{value[1].class}" if value[1].instance_of?(Fixnum)
-        raise "Already have value index '#{value[1]}' in another model but with different prefix '#{@@values_by_number[value[1]]}'" if @@values_by_number.include?(value[1]) && @@values_by_number[value[1]] != value[2]
+        raise "Already have value index '#{value[1]}' in another model but with different prefix '#{@@values_by_number[value[1]]}'" if @@values_by_number.key?(value[1]) && @@values_by_number[value[1]] != value[2]
 
         # date types are special, mark them so the first model they're seen for
-        if !@@values_by_number.include?(value[1])
-          if value[3] == :date
-            value_range = Xapian::DateValueRangeProcessor.new(value[1])
-          elsif value[3] == :string
-            value_range = Xapian::StringValueRangeProcessor.new(value[1])
-          elsif value[3] == :number
-            value_range = Xapian::NumberValueRangeProcessor.new(value[1])
+        if !@@values_by_number.key?(value[1])
+          value_range = case value[3]
+          when :date
+            Xapian::DateValueRangeProcessor.new(value[1])
+          when :string
+            Xapian::StringValueRangeProcessor.new(value[1])
+          when :number
+            Xapian::NumberValueRangeProcessor.new(value[1])
           else
             raise "Unknown value type '#{value[3]}'"
           end
@@ -182,15 +180,14 @@ module ActsAsXapian
 
     new_path = @@db_path + suffix
     raise "writable_suffix/suffix inconsistency" if @@writable_suffix && @@writable_suffix != suffix
-    if @@writable_db.nil?
-      # for indexing
-      @@writable_db = Xapian::WritableDatabase.new(new_path, Xapian::DB_CREATE_OR_OPEN)
-      @@term_generator = Xapian::TermGenerator.new()
-      @@term_generator.set_flags(Xapian::TermGenerator::FLAG_SPELLING, 0)
-      @@term_generator.database = @@writable_db
-      @@term_generator.stemmer = @@stemmer
-      @@writable_suffix = suffix
-    end
+
+    # for indexing
+    @@writable_db = Xapian::WritableDatabase.new(new_path, Xapian::DB_CREATE_OR_OPEN)
+    @@term_generator = Xapian::TermGenerator.new()
+    @@term_generator.set_flags(Xapian::TermGenerator::FLAG_SPELLING, 0)
+    @@term_generator.database = @@writable_db
+    @@term_generator.stemmer = @@stemmer
+    @@writable_suffix = suffix
   end
 
   ######################################################################
@@ -207,7 +204,7 @@ module ActsAsXapian
   # make sure that each index update is definitely saved to disk before
   # logging in the database that it has been.
   def ActsAsXapian.update_index(flush = false, verbose = false)
-    # STDOUT.puts("start of ActsAsXapian.update_index") if verbose
+    # puts "start of ActsAsXapian.update_index" if verbose
 
     # Before calling writable_init we have to make sure every model class has been initialized.
     # i.e. has had its class code loaded, so acts_as_xapian has been called inside it, and
@@ -218,18 +215,19 @@ module ActsAsXapian
 
     ActsAsXapian.writable_init
 
-    ids_to_refresh = ActsAsXapianJob.find(:all).map { |i| i.id }
+    ids_to_refresh = ActsAsXapianJob.find(:all, :select => 'id').map { |i| i.id }
     ids_to_refresh.each do |id|
       begin
-        ActiveRecord::Base.transaction do
+        ActsAsXapianJob.transaction do
           job = ActsAsXapianJob.find(id, :lock =>true)
-          STDOUT.puts("ActsAsXapian.update_index #{job.action} #{job.model} #{job.model_id.to_s}") if verbose
+          puts "ActsAsXapian.update_index #{job.action} #{job.model} #{job.model_id.to_s}" if verbose
           begin
-            if job.action == 'update'
+            case job.action
+            when 'update'
               # XXX Index functions may reference other models, so we could eager load here too?
               model = job.model.constantize.find(job.model_id) # :include => cls.constantize.xapian_options[:include]
               model.xapian_index
-            elsif job.action == 'destroy'
+            when 'destroy'
               # Make dummy model with right id, just for destruction
               model = job.model.constantize.new
               model.id = job.model_id
@@ -250,7 +248,7 @@ module ActsAsXapian
         # XXX If item is later deleted, this should give up, and it
         # won't. It will keep trying (assuming update_index called from
         # regular cron job) and mayhap cause trouble.
-        STDERR.puts(detail.backtrace.join("\n") + "\nFAILED ActsAsXapian.update_index job #{id} #{$!}")
+        STDERR.puts("#{detail.backtrace.join("\n")}\nFAILED ActsAsXapian.update_index job #{id} #{$!}")
       end
     end
   end
@@ -281,10 +279,10 @@ module ActsAsXapian
     model_classes.each do |model_class|
       model_class.transaction do
         0.step(model_class.count, batch_size) do |i|
-          STDOUT.puts("ActsAsXapian: New batch. From #{i} to #{i + batch_size}") if verbose
+          puts "ActsAsXapian: New batch. From #{i} to #{i + batch_size}" if verbose
           models = model_class.find(:all, :limit => batch_size, :offset => i, :order => :id)
           models.each do |model|
-            STDOUT.puts("ActsAsXapian.rebuild_index #{model_class} #{model.id}") if verbose
+            puts "ActsAsXapian.rebuild_index #{model_class} #{model.id}" if verbose
             model.xapian_index
           end
         end
@@ -325,15 +323,12 @@ module ActsAsXapian
     # Extract value of a field from the model
     def xapian_value(field, type = nil)
       value = self[field] || self.send(field.to_sym)
-      if type == :date
-        if value.kind_of?(Time)
-          value.utc.strftime("%Y%m%d")
-        elsif value.kind_of?(Date)
-          value.to_time.utc.strftime("%Y%m%d")
-        else
-          raise "Only Time or Date types supported by acts_as_xapian for :date fields, got #{value.class}"
-        end
-      elsif type == :boolean
+      case type
+      when :date
+        value = value.to_time if value.kind_of?(Date)
+        raise "Only Time or Date types supported by acts_as_xapian for :date fields, got #{value.class}" unless value.kind_of?(Time)
+        value.utc.strftime("%Y%m%d")
+      when :boolean
         value ? true : false
       else
         value.to_s
@@ -343,12 +338,9 @@ module ActsAsXapian
     # Store record in the Xapian database
     def xapian_index
       # if we have a conditional function for indexing, call it and destory object if failed
-      if self.class.xapian_options.include?(:if)
-        if_value = xapian_value(self.class.xapian_options[:if], :boolean)
-        if !if_value
-          self.xapian_destroy
-          return
-        end
+      if self.class.xapian_options.key?(:if) && !xapian_value(self.class.xapian_options[:if], :boolean)
+        self.xapian_destroy
+        return
       end
 
       # otherwise (re)write the Xapian record for the object
@@ -359,19 +351,15 @@ module ActsAsXapian
 
       doc.add_term("M#{self.class}")
       doc.add_term("I#{doc.data}")
-      if self.xapian_options[:terms]
-        self.xapian_options[:terms].each do |term|
-          ActsAsXapian.term_generator.increase_termpos # stop phrases spanning different text fields
-          ActsAsXapian.term_generator.index_text(xapian_value(term[0]), 1, term[1])
-        end
+      (self.xapian_options[:terms] || []).each do |term|
+        ActsAsXapian.term_generator.increase_termpos # stop phrases spanning different text fields
+        ActsAsXapian.term_generator.index_text(xapian_value(term[0]), 1, term[1])
       end
-      self.xapian_options[:values].each {|value| doc.add_value(value[1], xapian_value(value[0], value[3])) } if self.xapian_options[:values]
-      if self.xapian_options[:texts]
-        self.xapian_options[:texts].each do |text|
-          ActsAsXapian.term_generator.increase_termpos # stop phrases spanning different text fields
-          # XXX the "1" here is a weight that could be varied for a boost function
-          ActsAsXapian.term_generator.index_text(xapian_value(text), 1)
-        end
+      (self.xapian_options[:values] || []).each {|value| doc.add_value(value[1], xapian_value(value[0], value[3])) }
+      (self.xapian_options[:texts] || []).each do |text|
+        ActsAsXapian.term_generator.increase_termpos # stop phrases spanning different text fields
+        # XXX the "1" here is a weight that could be varied for a boost function
+        ActsAsXapian.term_generator.index_text(xapian_value(text), 1)
       end
 
       ActsAsXapian.writable_db.replace_document("I#{doc.data}", doc)
@@ -387,7 +375,7 @@ module ActsAsXapian
       model = self.class.base_class.to_s
       model_id = self.id
       ActiveRecord::Base.transaction do
-        found = ActsAsXapianJob.delete_all([ "model = ? and model_id = ?", model, model_id])
+        found = ActsAsXapianJob.delete_all(["model = ? and model_id = ?", model, model_id])
         job = ActsAsXapianJob.new
         job.model = model
         job.model_id = model_id
@@ -400,7 +388,7 @@ module ActsAsXapian
       model = self.class.base_class.to_s
       model_id = self.id
       ActiveRecord::Base.transaction do
-        found = ActsAsXapianJob.delete_all([ "model = ? and model_id = ?", model, model_id])
+        found = ActsAsXapianJob.delete_all(["model = ? and model_id = ?", model, model_id])
         job = ActsAsXapianJob.new
         job.model = model
         job.model_id = model_id
