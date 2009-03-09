@@ -6,4 +6,6 @@
 # $Id: init.rb,v 1.1 2008/04/23 13:33:50 francis Exp $
 
 require 'acts_as_xapian'
-
+require 'acts_as_xapian/query_base'
+require 'acts_as_xapian/search'
+require 'acts_as_xapian/similar'
