@@ -1,13 +1,7 @@
 module ActsAsXapian
   # Base class for Search and Similar below
   class QueryBase
-    attr_accessor :offset
-    attr_accessor :limit
-    attr_accessor :query
-    attr_accessor :matches
-    attr_accessor :query_models
-    attr_accessor :runtime
-    attr_accessor :cached_results
+    attr_accessor :offset, :limit, :query, :matches, :query_models, :runtime, :cached_results
 
     def initialize_db
       self.runtime = 0.0
@@ -22,11 +16,11 @@ module ActsAsXapian
       #raise options.to_yaml
 
       self.runtime += Benchmark::realtime do
-        offset = options[:offset] || 0; offset = offset.to_i
+        offset = options[:offset].to_i
         @limit = (options[:limit] || -1).to_i
-        sort_by_prefix = options[:sort_by_prefix] || nil
+        sort_by_prefix = options[:sort_by_prefix]
         sort_by_ascending = options[:sort_by_ascending].nil? ? true : options[:sort_by_ascending]
-        collapse_by_prefix = options[:collapse_by_prefix] || nil
+        collapse_by_prefix = options[:collapse_by_prefix]
 
         ActsAsXapian.enquire.query = self.query
 
@@ -85,29 +79,26 @@ module ActsAsXapian
       end
 
       # Log time taken, excluding database lookups below which will be displayed separately by ActiveRecord
-      if ActiveRecord::Base.logger
-        ActiveRecord::Base.logger.debug("  Xapian query (%.5fs) #{self.log_description}" % self.runtime)
-      end
+      ActiveRecord::Base.logger.debug("  Xapian query (%.5fs) #{self.log_description}" % self.runtime) if ActiveRecord::Base.logger
 
       # Look up without too many SQL queries
-      lhash = {}
-      lhash.default = []
-      docs.each do |doc|
+      lhash = docs.inject({}) do |s,doc|
         k = doc[:data].split('-')
-        lhash[k[0]] = lhash[k[0]] + [k[1]]
+        (s[k[0]] ||= []) << k[1]
+        s
       end
       # for each class, look up all ids
       chash = {}
       lhash.each_pair do |cls, ids|
         joins = "INNER JOIN (select #{ids.first} as id #{ids[1..-1].map {|i| "union all select #{i.to_s} "} * ' '}) AS x ON #{cls.constantize.table_name}.#{cls.constantize.primary_key} = x.id"
         found = cls.constantize.find(:all, :joins => joins, :include => cls.constantize.xapian_options[:eager_load])
-        found.each {|f| chash[[cls, f.id]] = f }
+        found.each {|f| (chash[cls] ||= {})[f.id] = f }
       end
       # now get them in right order again
-      results = []
-      docs.each {|doc| k = doc[:data].split('-'); results << { :model => chash[[k[0], k[1].to_i]],
-              :percent => doc[:percent], :weight => doc[:weight], :collapse_count => doc[:collapse_count] } }
-      self.cached_results = results
+      self.cached_results = docs.map do |doc|
+        k = doc[:data].split('-')
+        { :model => chash[k[0]][k[1].to_i], :percent => doc[:percent], :weight => doc[:weight], :collapse_count => doc[:collapse_count] }
+      end
     end
   end
 end

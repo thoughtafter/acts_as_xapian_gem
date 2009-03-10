@@ -16,14 +16,11 @@ module ActsAsXapian
     # query_string - user inputed query string, with syntax much like Google Search
     def initialize(model_classes, query_string, options = {})
       # Check parameters, convert to actual array of model classes
-      new_model_classes = []
-      model_classes = [model_classes] if model_classes.class != Array
-      model_classes.each do |model_class|
-        raise "pass in the model class itself, or a string containing its name" if model_class.class != Class && model_class.class != String
-        model_class = model_class.constantize if model_class.class == String
-        new_model_classes.push(model_class)
+      model_classes = Array(model_classes).map do |model_class|
+        model_class = model_class.constantize if model_class.instance_of?(String)
+        raise "pass in the model class itself, or a string containing its name" unless model_class.instance_of?(Class)
+        model_class
       end
-      model_classes = new_model_classes
 
       # Set things up
       self.initialize_db
@@ -47,13 +44,9 @@ module ActsAsXapian
     # date ranges or similar. Use this for cheap highlighting with
     # TextHelper::highlight, and excerpt.
     def words_to_highlight
-      query_nopunc = self.query_string.gsub(/[^\w:\.\/_]/i, " ")
-      query_nopunc = query_nopunc.gsub(/\s+/, " ")
-      words = query_nopunc.split(" ")
-      # Remove anything with a :, . or / in it
-      words = words.find_all {|o| !o.match(/(:|\.|\/)/) }
-      words = words.find_all {|o| !o.match(/^(AND|NOT|OR|XOR)$/) }
-      words
+      query_nopunc = self.query_string.gsub(/[^\w:\.\/_]/i, " ").gsub(/\s+/, " ")
+      # Split on ' ' and remove anything with a :, . or / in it or boolean operators
+      query_nopunc.split(" ").reject {|o| o.match(/(:|\.|\/)|^(AND|NOT|OR|XOR)$/) }
     end
 
     # Text for lines in log file
