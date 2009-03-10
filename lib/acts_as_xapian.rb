@@ -383,7 +383,7 @@ module ActsAsXapian
 
     # Extract value of a field from the model
     def xapian_value(field, type = nil)
-      value = self[field] || self.send(field.to_sym)
+      value = self.respond_to?(field) ? self.send(field) : self[field] # Give preference to method if it exists
       case type
       when :date
         value = value.to_time if value.kind_of?(Date)
