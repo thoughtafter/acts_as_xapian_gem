@@ -18,29 +18,18 @@ module ActsAsXapian
         # Find the documents by their unique term
         input_models_query = Xapian::Query.new(Xapian::Query::OP_OR, query_models.map {|m| "I#{m.xapian_document_term}" })
         ActsAsXapian.enquire.query = input_models_query
-        matches = ActsAsXapian.enquire.mset(0, 100, 100) # XXX so this whole method will only work with 100 docs
 
         # Get set of relevant terms for those documents
         selection = Xapian::RSet.new()
-        iter = matches._begin
-        while !iter.equals(matches._end)
-          selection.add_document(iter)
-          iter.next
-        end
+        ActsAsXapian.enquire.mset(0, 100, 100).matches.each {|m| selection.add_document(m.docid) } # XXX so this whole method will only work with 100 docs
 
         # Bit weird that the function to make esets is part of the enquire
         # object. This explains what exactly it does, which is to exclude
         # terms in the existing query.
         # http://thread.gmane.org/gmane.comp.search.xapian.general/3673/focus=3681
-        eset = ActsAsXapian.enquire.eset(40, selection)
-
+        #
         # Do main search for them
-        self.important_terms = []
-        iter = eset._begin
-        while !iter.equals(eset._end)
-          self.important_terms.push(iter.term)
-          iter.next
-        end
+        self.important_terms = ActsAsXapian.enquire.eset(40, selection).terms.map {|e| e.name }
         similar_query = Xapian::Query.new(Xapian::Query::OP_OR, self.important_terms)
         # Exclude original
         combined_query = Xapian::Query.new(Xapian::Query::OP_AND_NOT, similar_query, input_models_query)

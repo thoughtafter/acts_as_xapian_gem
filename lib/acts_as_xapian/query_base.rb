@@ -65,17 +65,10 @@ module ActsAsXapian
       # If they've already pulled out the results, just return them.
       return self.cached_results unless self.cached_results.nil?
 
-      docs = []
+      docs = nil
       self.runtime += Benchmark::realtime do
         # Pull out all the results
-        iter = self.matches._begin
-        while !iter.equals(self.matches._end)
-          docs.push({:data => iter.document.data,
-                  :percent => iter.percent,
-                  :weight => iter.weight,
-                  :collapse_count => iter.collapse_count})
-          iter.next
-        end
+        docs = self.matches.matches.map {|doc| {:data => doc.document.data, :percent => doc.percent, :weight => doc.weight, :collapse_count => doc.collapse_count} }
       end
 
       # Log time taken, excluding database lookups below which will be displayed separately by ActiveRecord
