@@ -366,6 +366,10 @@ module ActsAsXapian
       ActsAsXapian::Search.new([self], search_term, options)
     end
 
+    def with_xapian_scope(ids)
+      with_scope(:find => {:conditions => {"#{self.table_name}.#{self.primary_key}" => ids}, :include => self.xapian_options[:eager_load]}) { yield }
+    end
+
     #this method should return true if the integration of xapian on self is complete
     def xapian?
       self.included_modules.include?(InstanceMethods) && self.extended_by.include?(ClassMethods)

@@ -14,6 +14,15 @@ module ActsAsXapian
     # User]. Can take a single model class, or you can express the model
     # class names in strings if you like.
     # query_string - user inputed query string, with syntax much like Google Search
+    #
+    # options include
+    # - :limit - limit the number of records returned
+    # - :offset - start with this record number
+    # - :check_at_least - used for total match estimates. Set higher for greater accuracy at the cost of slower queries. default: 100
+    # - :sort_by_prefix - determines which data field to sort by. default: sort by relevance
+    # - :sort_by_ascending - determines which direction to sort. default: true (ascending sort)
+    # - :collapse_by_prefix - groups the return set by this prefix
+    # - :find_options - These options are passed through to the active record find. Be careful if searching against multiple model classes.
     def initialize(model_classes, query_string, options = {})
       # Check parameters, convert to actual array of model classes
       model_classes = Array(model_classes).map do |model_class|

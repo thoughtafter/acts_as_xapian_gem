@@ -13,14 +13,15 @@ module ActsAsXapian
 
     # Set self.query before calling this
     def initialize_query(options)
-      #raise options.to_yaml
-
       self.runtime += Benchmark::realtime do
-        offset = options[:offset].to_i
+        @offset = options[:offset].to_i
         @limit = (options[:limit] || -1).to_i
+        check_at_least = (options[:check_at_least] || 100).to_i
         sort_by_prefix = options[:sort_by_prefix]
         sort_by_ascending = options[:sort_by_ascending].nil? ? true : options[:sort_by_ascending]
         collapse_by_prefix = options[:collapse_by_prefix]
+        @find_options = options[:find_options]
+        @postpone_limit = !(@find_options.blank? || (@find_options[:conditions].blank? && @find_options[:joins].blank?))
 
         ActsAsXapian.enquire.query = self.query
 
@@ -39,7 +40,9 @@ module ActsAsXapian
           ActsAsXapian.enquire.collapse_key = value
         end
 
-        self.matches = ActsAsXapian.enquire.mset(offset, @limit, 100)
+        # If using find_options conditions have Xapian return the entire match set
+        # TODO Revisit. This is extremely inefficient for large indices
+        self.matches = ActsAsXapian.enquire.mset(@postpone_limit ? 0 : @offset, @postpone_limit ? -1 : @limit, check_at_least)
         self.cached_results = nil
       end
     end
@@ -50,6 +53,7 @@ module ActsAsXapian
     end
 
     # Estimate total number of results
+    # Note: Unreliable if using find_options with conditions or joins
     def matches_estimated
       self.matches.matches_estimated
     end
@@ -81,12 +85,25 @@ module ActsAsXapian
         s
       end
 
+      if @postpone_limit && lhash.size == 1
+        @find_options[:limit] = @limit unless @limit == -1
+        @find_options[:offset] = @offset
+      end
+
       # for each class, look up the associated ids
       chash = lhash.inject({}) do |out, (class_name, ids)|
         model = class_name.constantize # constantize is expensive do once
-        found = model.find(:all, :conditions => {"#{model.table_name}.#{model.primary_key}" => ids}, :include => model.xapian_options[:eager_load])
+        found = model.with_xapian_scope(ids) { model.find(:all, @find_options) }
         out[class_name] = found.inject({}) {|s,f| s[f.id] = f; s }
         out
+      end
+
+      if @postpone_limit
+        # Need to delete records not returned by the active record find
+        docs.delete_if do |doc|
+          model_name, id = doc[:data].split('-')
+          !(chash.key?(model_name) && chash[model_name].key?(id.to_i))
+        end
       end
 
       # add the model to each doc
@@ -94,7 +111,8 @@ module ActsAsXapian
         model_name, id = doc[:data].split('-')
         doc[:model] = chash[model_name][id.to_i]
       end
-      self.cached_results = docs
+
+      self.cached_results = @postpone_limit && lhash.size > 1 ? docs[@offset, @limit] : docs
     end
   end
 end
