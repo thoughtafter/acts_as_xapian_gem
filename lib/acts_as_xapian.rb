@@ -145,7 +145,7 @@ module ActsAsXapian
             when :string
               Xapian::StringValueRangeProcessor.new(value[1])
             when :number
-              Xapian::NumberValueRangeProcessor.new(value[1])
+              Xapian::NumberValueRangeProcessor.new(value[1],"#{value[2]}:",true)
             else
               raise "Unknown value type '#{value[3]}'"
             end
@@ -395,6 +395,8 @@ module ActsAsXapian
         value.utc.strftime("%Y%m%d")
       when :boolean
         value ? true : false
+      when :number
+        value.nil? ? "" : Xapian::sortable_serialise(value.to_f)
       else
         value.to_s
       end
