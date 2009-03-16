@@ -30,7 +30,9 @@ module ActsAsXapian
         else
           value = ActsAsXapian.values_by_prefix[sort_by_prefix]
           raise "couldn't find prefix '#{sort_by_prefix}'" if value.nil?
-          ActsAsXapian.enquire.sort_by_value_then_relevance!(value, sort_by_ascending)
+          # Xapian has inverted the meaning of ascending order to handle relevence sorting
+          # "keys which sort higher by string compare are better"
+          ActsAsXapian.enquire.sort_by_value_then_relevance!(value, !sort_by_ascending)
         end
         if collapse_by_prefix.nil?
           ActsAsXapian.enquire.collapse_key = Xapian.BAD_VALUENO
