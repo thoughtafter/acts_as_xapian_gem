@@ -136,7 +136,7 @@ module ActsAsXapian
         (options[:values] || []).each do |value|
           raise "Value index '#{value[1]}' must be an integer, is #{value[1].class}" unless value[1].instance_of?(Fixnum)
           raise "Already have value index '#{value[1]}' in another model but with different prefix '#{@@values_by_number[value[1]]}'" if @@values_by_number.key?(value[1]) && @@values_by_number[value[1]] != value[2]
-          raise "Already have value prefix '#{value[2]}' in another model but with different index '#{@@values_by_number[value[2]]}'" if value[3] == :number && @@values_by_prefix.key?(value[2]) && @@values_by_prefix[value[2]] != value[1]
+          raise "Already have value prefix '#{value[2]}' in another model but with different index '#{@@values_by_prefix[value[2]]}'" if value[3] == :number && @@values_by_prefix.key?(value[2]) && @@values_by_prefix[value[2]] != value[1]
 
           # date types are special, mark them so the first model they're seen for
           if !@@values_by_number.key?(value[1])
