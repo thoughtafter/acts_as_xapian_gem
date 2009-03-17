@@ -2,6 +2,7 @@ module ActsAsXapian
   # Base class for Search and Similar below
   class QueryBase
     attr_accessor :offset, :limit, :query, :matches, :query_models, :runtime, :cached_results
+    @@unlimited = 100000000
 
     def initialize_db
       self.runtime = 0.0
@@ -15,7 +16,7 @@ module ActsAsXapian
     def initialize_query(options)
       self.runtime += Benchmark::realtime do
         @offset = options[:offset].to_i
-        @limit = (options[:limit] || -1).to_i
+        @limit = (options[:limit] || @@unlimited).to_i
         check_at_least = (options[:check_at_least] || 100).to_i
         sort_by_prefix = options[:sort_by_prefix]
         sort_by_ascending = options[:sort_by_ascending].nil? ? true : options[:sort_by_ascending]
@@ -44,7 +45,7 @@ module ActsAsXapian
 
         # If using find_options conditions have Xapian return the entire match set
         # TODO Revisit. This is extremely inefficient for large indices
-        self.matches = ActsAsXapian.enquire.mset(@postpone_limit ? 0 : @offset, @postpone_limit ? -1 : @limit, check_at_least)
+        self.matches = ActsAsXapian.enquire.mset(@postpone_limit ? 0 : @offset, @postpone_limit ? @@unlimited : @limit, check_at_least)
         self.cached_results = nil
       end
     end
