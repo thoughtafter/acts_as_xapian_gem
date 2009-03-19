@@ -444,6 +444,7 @@ module ActsAsXapian
     def xapian_mark_needs_index
       model = self.class.base_class.to_s
       model_id = self.id
+      return false unless model_id # After save gets called even if save fails
       ActiveRecord::Base.transaction do
         found = ActsAsXapianJob.delete_all(["model = ? and model_id = ?", model, model_id])
         job = ActsAsXapianJob.new
