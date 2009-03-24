@@ -10,7 +10,7 @@ namespace :xapian do
     # "verbose=true" to print model name as it is run.
     desc 'Updates Xapian search index with changes to models since last call'
     task (:update_index => :environment) do
-        ActsAsXapian.update_index(ENV['flush'] ? true : false, ENV['verbose'] ? true : false)
+        ActsAsXapian::WriteableIndex.update_index(ENV['flush'] ? true : false, ENV['verbose'] ? true : false)
     end
 
     # Parameters - specify 'models="PublicBody User"' to say which models
@@ -22,7 +22,7 @@ namespace :xapian do
     desc 'Completely rebuilds Xapian search index (must specify all models)'
     task (:rebuild_index => :environment) do
         raise "specify ALL your models with models=\"ModelName1 ModelName2\" as parameter" if ENV['models'].nil?
-        ActsAsXapian.rebuild_index(ENV['models'].split(" ").map{|m| m.constantize}, ENV['verbose'] ? true : false)
+        ActsAsXapian::WriteableIndex.rebuild_index(ENV['models'].split(" ").map{|m| m.constantize}, ENV['verbose'] ? true : false)
     end
 
     # Parameters - are models, query, offset, limit, sort_by_prefix,

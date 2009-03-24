@@ -7,9 +7,9 @@ module ActsAsXapian
     def initialize_db
       self.runtime = 0.0
 
-      ActsAsXapian.readable_init
+      ReadableIndex.readable_init
 
-      raise "ActsAsXapian not initialized" if ActsAsXapian.db.nil?
+      raise "ActsAsXapian not initialized" unless ReadableIndex.initialized?
     end
 
     # Set self.query before calling this
@@ -24,28 +24,28 @@ module ActsAsXapian
         @find_options = options[:find_options]
         @postpone_limit = !(@find_options.blank? || (@find_options[:conditions].blank? && @find_options[:joins].blank?))
 
-        ActsAsXapian.enquire.query = self.query
+        ReadableIndex.enquire.query = self.query
 
         if sort_by_prefix.nil?
-          ActsAsXapian.enquire.sort_by_relevance!
+          ReadableIndex.enquire.sort_by_relevance!
         else
-          value = ActsAsXapian.values_by_prefix[sort_by_prefix]
+          value = ReadableIndex.values_by_prefix[sort_by_prefix]
           raise "couldn't find prefix '#{sort_by_prefix}'" if value.nil?
           # Xapian has inverted the meaning of ascending order to handle relevence sorting
           # "keys which sort higher by string compare are better"
-          ActsAsXapian.enquire.sort_by_value_then_relevance!(value, !sort_by_ascending)
+          ReadableIndex.enquire.sort_by_value_then_relevance!(value, !sort_by_ascending)
         end
         if collapse_by_prefix.nil?
-          ActsAsXapian.enquire.collapse_key = Xapian.BAD_VALUENO
+          ReadableIndex.enquire.collapse_key = Xapian.BAD_VALUENO
         else
-          value = ActsAsXapian.values_by_prefix[collapse_by_prefix]
+          value = ReadableIndex.values_by_prefix[collapse_by_prefix]
           raise "couldn't find prefix '#{collapse_by_prefix}'" if value.nil?
-          ActsAsXapian.enquire.collapse_key = value
+          ReadableIndex.enquire.collapse_key = value
         end
 
         # If using find_options conditions have Xapian return the entire match set
         # TODO Revisit. This is extremely inefficient for large indices
-        self.matches = ActsAsXapian.enquire.mset(@postpone_limit ? 0 : @offset, @postpone_limit ? @@unlimited : @limit, check_at_least)
+        self.matches = ReadableIndex.enquire.mset(@postpone_limit ? 0 : @offset, @postpone_limit ? @@unlimited : @limit, check_at_least)
         self.cached_results = nil
       end
     end
@@ -63,7 +63,7 @@ module ActsAsXapian
 
     # Return query string with spelling correction
     def spelling_correction
-      correction = ActsAsXapian.query_parser.get_corrected_query_string
+      correction = ReadableIndex.query_parser.get_corrected_query_string
       correction.empty? ? nil : correction
     end
 

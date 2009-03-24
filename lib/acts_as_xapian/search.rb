@@ -5,6 +5,10 @@ module ActsAsXapian
   class Search < QueryBase
     attr_accessor :query_string
 
+    @@parse_query_flags = Xapian::QueryParser::FLAG_BOOLEAN | Xapian::QueryParser::FLAG_PHRASE |
+      Xapian::QueryParser::FLAG_LOVEHATE | Xapian::QueryParser::FLAG_WILDCARD |
+      Xapian::QueryParser::FLAG_SPELLING_CORRECTION
+
     # Note that model_classes is not only sometimes useful here - it's
     # essential to make sure the classes have been loaded, and thus
     # acts_as_xapian called on them, so we know the fields for the query
@@ -39,10 +43,7 @@ module ActsAsXapian
 
       # Construct query which only finds things from specified models
       model_query = Xapian::Query.new(Xapian::Query::OP_OR, model_classes.map {|mc| "M#{mc}" })
-      user_query = ActsAsXapian.query_parser.parse_query(self.query_string,
-            Xapian::QueryParser::FLAG_BOOLEAN | Xapian::QueryParser::FLAG_PHRASE |
-            Xapian::QueryParser::FLAG_LOVEHATE | Xapian::QueryParser::FLAG_WILDCARD |
-            Xapian::QueryParser::FLAG_SPELLING_CORRECTION)
+      user_query = ReadableIndex.query_parser.parse_query(self.query_string, @@parse_query_flags)
       self.query = Xapian::Query.new(Xapian::Query::OP_AND, model_query, user_query)
 
       # Call base class constructor
