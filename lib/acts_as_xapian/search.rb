@@ -36,14 +36,14 @@ module ActsAsXapian
       end
 
       # Set things up
-      self.initialize_db
+      self.initialize_db(model_classes)
 
       # Case of a string, searching for a Google-like syntax query
       self.query_string = query_string
 
       # Construct query which only finds things from specified models
       model_query = Xapian::Query.new(Xapian::Query::OP_OR, model_classes.map {|mc| "M#{mc}" })
-      user_query = ReadableIndex.query_parser.parse_query(self.query_string, @@parse_query_flags)
+      user_query = @index.query_parser.parse_query(self.query_string, @@parse_query_flags)
       self.query = Xapian::Query.new(Xapian::Query::OP_AND, model_query, user_query)
 
       # Call base class constructor

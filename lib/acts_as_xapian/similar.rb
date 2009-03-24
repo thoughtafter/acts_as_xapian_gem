@@ -9,7 +9,7 @@ module ActsAsXapian
     # model_classes - model classes to search within, e.g. [PublicBody, User]
     # query_models - list of models you want to find things similar to
     def initialize(model_classes, query_models, options = {})
-      self.initialize_db
+      self.initialize_db(model_classes)
 
       self.runtime += Benchmark::realtime do
         # Case of an array, searching for models similar to those models in the array
@@ -17,11 +17,11 @@ module ActsAsXapian
 
         # Find the documents by their unique term
         input_models_query = Xapian::Query.new(Xapian::Query::OP_OR, query_models.map {|m| "I#{m.xapian_document_term}" })
-        ReadableIndex.enquire.query = input_models_query
+        @index.enquire.query = input_models_query
 
         # Get set of relevant terms for those documents
         selection = Xapian::RSet.new()
-        ReadableIndex.enquire.mset(0, 100, 100).matches.each {|m| selection.add_document(m.docid) } # XXX so this whole method will only work with 100 docs
+        @index.enquire.mset(0, 100, 100).matches.each {|m| selection.add_document(m.docid) } # XXX so this whole method will only work with 100 docs
 
         # Bit weird that the function to make esets is part of the enquire
         # object. This explains what exactly it does, which is to exclude
@@ -29,7 +29,7 @@ module ActsAsXapian
         # http://thread.gmane.org/gmane.comp.search.xapian.general/3673/focus=3681
         #
         # Do main search for them
-        self.important_terms = ReadableIndex.enquire.eset(40, selection).terms.map {|e| e.name }
+        self.important_terms = @index.enquire.eset(40, selection).terms.map {|e| e.name }
         similar_query = Xapian::Query.new(Xapian::Query::OP_OR, self.important_terms)
         # Exclude original
         combined_query = Xapian::Query.new(Xapian::Query::OP_AND_NOT, similar_query, input_models_query)

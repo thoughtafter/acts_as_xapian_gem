@@ -4,12 +4,12 @@ module ActsAsXapian
     attr_accessor :offset, :limit, :query, :matches, :query_models, :runtime, :cached_results
     @@unlimited = 50000000
 
-    def initialize_db
+    def initialize_db(models)
       self.runtime = 0.0
 
-      ReadableIndex.readable_init
+      @index = ReadableIndex.index_for(models)
 
-      raise "ActsAsXapian not initialized" unless ReadableIndex.initialized?
+      raise "ActsAsXapian::ReadableIndex not initialized" if @index.nil?
     end
 
     # Set self.query before calling this
@@ -24,28 +24,28 @@ module ActsAsXapian
         @find_options = options[:find_options]
         @postpone_limit = !(@find_options.blank? || (@find_options[:conditions].blank? && @find_options[:joins].blank?))
 
-        ReadableIndex.enquire.query = self.query
+        @index.enquire.query = self.query
 
         if sort_by_prefix.nil?
-          ReadableIndex.enquire.sort_by_relevance!
+          @index.enquire.sort_by_relevance!
         else
-          value = ReadableIndex.values_by_prefix[sort_by_prefix]
+          value = @index.values_by_prefix[sort_by_prefix]
           raise "couldn't find prefix '#{sort_by_prefix}'" if value.nil?
           # Xapian has inverted the meaning of ascending order to handle relevence sorting
           # "keys which sort higher by string compare are better"
-          ReadableIndex.enquire.sort_by_value_then_relevance!(value, !sort_by_ascending)
+          @index.enquire.sort_by_value_then_relevance!(value, !sort_by_ascending)
         end
         if collapse_by_prefix.nil?
-          ReadableIndex.enquire.collapse_key = Xapian.BAD_VALUENO
+          @index.enquire.collapse_key = Xapian.BAD_VALUENO
         else
-          value = ReadableIndex.values_by_prefix[collapse_by_prefix]
+          value = @index.values_by_prefix[collapse_by_prefix]
           raise "couldn't find prefix '#{collapse_by_prefix}'" if value.nil?
-          ReadableIndex.enquire.collapse_key = value
+          @index.enquire.collapse_key = value
         end
 
         # If using find_options conditions have Xapian return the entire match set
         # TODO Revisit. This is extremely inefficient for large indices
-        self.matches = ReadableIndex.enquire.mset(@postpone_limit ? 0 : @offset, @postpone_limit ? @@unlimited : @limit, check_at_least)
+        self.matches = @index.enquire.mset(@postpone_limit ? 0 : @offset, @postpone_limit ? @@unlimited : @limit, check_at_least)
         self.cached_results = nil
       end
     end
@@ -63,7 +63,7 @@ module ActsAsXapian
 
     # Return query string with spelling correction
     def spelling_correction
-      correction = ReadableIndex.query_parser.get_corrected_query_string
+      correction = @index.query_parser.get_corrected_query_string
       correction.empty? ? nil : correction
     end
 
