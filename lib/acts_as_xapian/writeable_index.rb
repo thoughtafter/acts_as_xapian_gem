@@ -49,7 +49,7 @@ module ActsAsXapian
         # Before calling writable_init we have to make sure every model class has been initialized.
         # i.e. has had its class code loaded, so acts_as_xapian has been called inside it, and
         # we have the info from acts_as_xapian.
-        model_classes = ActsAsXapianJob.find_by_sql("select model from acts_as_xapian_jobs group by model").map {|a| a.model.constantize }
+        model_classes = ActsAsXapianJob.find(:all, :select => 'model', :group => 'model').map {|a| a.model.constantize }
         # If there are no models in the queue, then nothing to do
         return if model_classes.empty?
 
@@ -117,14 +117,13 @@ module ActsAsXapian
         ActsAsXapianJob.destroy_all
         batch_size = 1000
         model_classes.each do |model_class|
-          model_class.transaction do
-            0.step(model_class.count, batch_size) do |i|
-              puts "ActsAsXapian::WriteableIndex: New batch. From #{i} to #{i + batch_size}" if verbose
-              models = model_class.find(:all, :limit => batch_size, :offset => i, :order => :id)
-              models.each do |model|
-                puts "ActsAsXapian::WriteableIndex.rebuild_index #{model_class} #{model.id}" if verbose
-                model.xapian_index
-              end
+          all_ids = model_class.find(:all, :select => model_class.primary_key, :order => model_class.primary_key).map {|i| i.id }
+          all_ids.each_slice(batch_size) do |ids|
+            puts "ActsAsXapian::WriteableIndex: New batch. Including ids #{ids.first} to #{ids.last}" if verbose
+            models = model_class.find(:all, :conditions => {model_class.primary_key => ids})
+            models.each do |model|
+              puts "ActsAsXapian::WriteableIndex.rebuild_index #{model_class} #{model.id}" if verbose
+              model.xapian_index
             end
           end
         end
