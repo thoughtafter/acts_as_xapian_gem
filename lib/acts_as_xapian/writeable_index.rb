@@ -109,12 +109,8 @@ module ActsAsXapian
         self.writable_init(".new")
 
         # Index everything
-        # XXX not a good place to do this destroy, as unindexed list is lost if
-        # process is aborted and old database carries on being used. Perhaps do in
-        # transaction and commit after rename below? Not sure if thenlocking is then bad
-        # for live website running at same time.
 
-        ActsAsXapianJob.destroy_all
+        most_recent_job = ActsAsXapianJob.find(:first, :order => 'id DESC')
         batch_size = 1000
         model_classes.each do |model_class|
           all_ids = model_class.find(:all, :select => model_class.primary_key, :order => model_class.primary_key).map {|i| i.id }
@@ -145,6 +141,8 @@ module ActsAsXapian
           raise "old database now at #{temp_path} is not Xapian flint database, please delete for me" unless File.exist?(File.join(temp_path, "iamflint"))
           FileUtils.rm_r(temp_path)
         end
+
+        ActsAsXapianJob.delete_all ['id <= ?', most_recent_job.id] if most_recent_job
 
         # You'll want to restart your FastCGI or Mongrel processes after this,
         # so they get the new db
