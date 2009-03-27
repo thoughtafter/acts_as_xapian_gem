@@ -88,9 +88,24 @@ module ActsAsXapian
         s
       end
 
-      if @postpone_limit && lhash.size == 1
-        @find_options[:limit] = @limit unless @limit == -1
-        @find_options[:offset] = @offset
+      if @postpone_limit
+        found = lhash.map do |(class_name, ids)|
+          model = class_name.constantize # constantize is expensive do once
+          model.with_xapian_scope(ids) { model.find(:all, @find_options.merge(:select => "#{model.table_name}.#{model.primary_key}")) }.map {|m| m.xapian_document_term }
+        end.flatten
+
+        self.runtime += Benchmark::realtime do
+          found = found.inject({}) {|s,i| s[i] = true; s } # hash key searching is MUCH faster than an array sequential scan
+          docs.delete_if {|doc| !found.delete(doc[:data]) }
+
+          docs = docs[@offset,@limit]
+
+          lhash = docs.inject({}) do |s,doc|
+            model_name, id = doc[:data].split('-')
+            (s[model_name] ||= []) << id
+            s
+          end
+        end
       end
 
       # for each class, look up the associated ids
@@ -99,14 +114,6 @@ module ActsAsXapian
         found = model.with_xapian_scope(ids) { model.find(:all, @find_options) }
         out[class_name] = found.inject({}) {|s,f| s[f.id] = f; s }
         out
-      end
-
-      if @postpone_limit
-        # Need to delete records not returned by the active record find
-        docs.delete_if do |doc|
-          model_name, id = doc[:data].split('-')
-          !(chash.key?(model_name) && chash[model_name].key?(id.to_i))
-        end
       end
 
       # add the model to each doc
