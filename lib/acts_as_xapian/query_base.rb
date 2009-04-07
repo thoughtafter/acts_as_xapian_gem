@@ -58,7 +58,7 @@ module ActsAsXapian
     # Estimate total number of results
     # Note: Unreliable if using find_options with conditions or joins
     def matches_estimated
-      self.matches.matches_estimated
+      @matches_estimated || self.matches.matches_estimated
     end
 
     # Return query string with spelling correction
@@ -98,7 +98,9 @@ module ActsAsXapian
           found = found.inject({}) {|s,i| s[i] = true; s } # hash key searching is MUCH faster than an array sequential scan
           docs.delete_if {|doc| !found.delete(doc[:data]) }
 
-          docs = docs[@offset,@limit]
+          @matches_estimated = docs.size
+
+          docs = docs[@offset,@limit] || []
 
           lhash = docs.inject({}) do |s,doc|
             model_name, id = doc[:data].split('-')
@@ -122,7 +124,7 @@ module ActsAsXapian
         doc[:model] = chash[model_name][id.to_i]
       end
 
-      self.cached_results = @postpone_limit && lhash.size > 1 ? docs[@offset, @limit] : docs
+      self.cached_results = docs
     end
   end
 end
