@@ -79,7 +79,7 @@ module ActsAsXapian
       end
 
       # Log time taken, excluding database lookups below which will be displayed separately by ActiveRecord
-      ActiveRecord::Base.logger.debug("  Xapian query (%.5fs) #{self.log_description}" % self.runtime) if ActiveRecord::Base.logger
+      ActiveRecord::Base.logger.debug("  Xapian query (%.5fs) #{self.log_description.gsub('%','%%')}" % self.runtime) if ActiveRecord::Base.logger
 
       # Group the ids by the model they belong to
       lhash = docs.inject({}) do |s,doc|
