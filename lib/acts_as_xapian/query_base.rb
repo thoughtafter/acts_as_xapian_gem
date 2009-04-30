@@ -2,7 +2,7 @@ module ActsAsXapian
   # Base class for Search and Similar below
   class QueryBase
     attr_accessor :offset, :limit, :query, :matches, :query_models, :runtime, :cached_results
-    @@unlimited = 50000000
+    @@unlimited = 1000000
 
     def initialize_db(models)
       self.runtime = 0.0
