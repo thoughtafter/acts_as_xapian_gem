@@ -46,6 +46,8 @@ module ActsAsXapian
       include InstanceMethods
       extend ClassMethods
 
+      class_eval('def xapian_boost(term_type, term); 1; end') unless self.instance_methods.include?('xapian_boost')
+
       # extend has_many && has_many_and_belongs_to associations with our ProxyFinder to get scoped results
       # I've written a small report in the discussion group why this is the proper way of doing this.
       # see here: XXX - write it you lazy douche bag!
@@ -153,13 +155,12 @@ module ActsAsXapian
       doc.add_term("I#{doc.data}")
       (self.xapian_options[:terms] || []).each do |term|
         WriteableIndex.term_generator.increase_termpos # stop phrases spanning different text fields
-        WriteableIndex.term_generator.index_text(xapian_value(term[0]), 1, term[1])
+        WriteableIndex.term_generator.index_text(xapian_value(term[0]), self.xapian_boost(:term, term[0]), term[1])
       end
       (self.xapian_options[:values] || []).each {|value| doc.add_value(value[1], xapian_value(value[0], value[3])) }
       (self.xapian_options[:texts] || []).each do |text|
         WriteableIndex.term_generator.increase_termpos # stop phrases spanning different text fields
-        # XXX the "1" here is a weight that could be varied for a boost function
-        WriteableIndex.term_generator.index_text(xapian_value(text), 1)
+        WriteableIndex.term_generator.index_text(xapian_value(text), self.xapian_boost(:text, text))
       end
 
       WriteableIndex.replace_document("I#{doc.data}", doc)
