@@ -1,58 +1,35 @@
 module ActsAsXapian
   # Base class for Search and Similar below
   class QueryBase
-    attr_accessor :offset, :limit, :query, :matches, :query_models, :runtime, :cached_results
+    attr_accessor :offset, :limit, :query, :query_models, :runtime, :cached_results
     @@unlimited = 1000000
-
-    def initialize_db(models)
-      self.runtime = 0.0
-
-      @index = ReadableIndex.index_for(models)
-
-      raise "ActsAsXapian::ReadableIndex not initialized" if @index.nil?
-    end
-
-    # Set self.query before calling this
-    def initialize_query(options)
-      self.runtime += Benchmark::realtime do
-        @offset = options[:offset].to_i
-        @limit = (options[:limit] || @@unlimited).to_i
-        check_at_least = (options[:check_at_least] || 100).to_i
-        sort_by_prefix = options[:sort_by_prefix]
-        sort_by_ascending = options[:sort_by_ascending].nil? ? true : options[:sort_by_ascending]
-        collapse_by_prefix = options[:collapse_by_prefix]
-        @find_options = options[:find_options]
-        @postpone_limit = !(@find_options.blank? || (@find_options[:conditions].blank? && @find_options[:joins].blank?))
-
-        @index.enquire.query = self.query
-
-        if sort_by_prefix.nil?
-          @index.enquire.sort_by_relevance!
-        else
-          value = @index.values_by_prefix[sort_by_prefix]
-          raise "couldn't find prefix '#{sort_by_prefix}'" if value.nil?
-          # Xapian has inverted the meaning of ascending order to handle relevence sorting
-          # "keys which sort higher by string compare are better"
-          @index.enquire.sort_by_value_then_relevance!(value, !sort_by_ascending)
-        end
-        if collapse_by_prefix.nil?
-          @index.enquire.collapse_key = Xapian.BAD_VALUENO
-        else
-          value = @index.values_by_prefix[collapse_by_prefix]
-          raise "couldn't find prefix '#{collapse_by_prefix}'" if value.nil?
-          @index.enquire.collapse_key = value
-        end
-
-        # If using find_options conditions have Xapian return the entire match set
-        # TODO Revisit. This is extremely inefficient for large indices
-        self.matches = @index.enquire.mset(@postpone_limit ? 0 : @offset, @postpone_limit ? @@unlimited : @limit, check_at_least)
-        self.cached_results = nil
-      end
-    end
 
     # Return a description of the query
     def description
       self.query.description
+    end
+
+    # Returns the mset for the query
+    def matches(reload = false)
+      return @matches unless @matches.nil? || reload
+
+      @retry = true
+      begin
+        self.runtime += Benchmark::realtime do
+          # If using find_options conditions have Xapian return the entire match set
+          # TODO Revisit. This is extremely inefficient for large indices
+          @matches = @index.enquire.mset(@postpone_limit ? 0 : @offset, @postpone_limit ? @@unlimited : @limit, @check_at_least)
+        end
+        @matches
+      rescue DatabaseModifiedError => e
+        if @retry
+          @retry = false
+          @index.reset_enquire!
+          initialize_enquire
+          retry
+        end
+        raise e
+      end
     end
 
     # Estimate total number of results
@@ -125,6 +102,59 @@ module ActsAsXapian
       end
 
       self.cached_results = docs
+    end
+
+    protected
+
+    def initialize_db(models)
+      self.runtime = 0.0
+
+      @index = ReadableIndex.index_for(models)
+
+      raise "ActsAsXapian::ReadableIndex not initialized" if @index.nil?
+    end
+
+    # Set self.query before calling this
+    def initialize_query(options)
+      self.runtime += Benchmark::realtime do
+        @offset = options[:offset].to_i
+        @limit = (options[:limit] || @@unlimited).to_i
+        @check_at_least = (options[:check_at_least] || 100).to_i
+        @sort_by_prefix = options[:sort_by_prefix]
+        @sort_by_ascending = options[:sort_by_ascending].nil? ? true : options[:sort_by_ascending]
+        @collapse_by_prefix = options[:collapse_by_prefix]
+        @find_options = options[:find_options]
+        @postpone_limit = !(@find_options.blank? || (@find_options[:conditions].blank? && @find_options[:joins].blank?))
+
+        self.cached_results = nil
+      end
+
+      initialize_enquire
+    end
+
+    def initialize_enquire
+      self.runtime += Benchmark::realtime do
+        @index.enquire.query = self.query
+
+        if @sort_by_prefix.nil?
+          @index.enquire.sort_by_relevance!
+        else
+          value = @index.values_by_prefix[@sort_by_prefix]
+          raise "couldn't find prefix '#{@sort_by_prefix}'" if value.nil?
+          # Xapian has inverted the meaning of ascending order to handle relevence sorting
+          # "keys which sort higher by string compare are better"
+          @index.enquire.sort_by_value_then_relevance!(value, !@sort_by_ascending)
+        end
+
+        if @collapse_by_prefix.nil?
+          @index.enquire.collapse_key = Xapian.BAD_VALUENO
+        else
+          value = @index.values_by_prefix[@collapse_by_prefix]
+          raise "couldn't find prefix '#{@collapse_by_prefix}'" if value.nil?
+          @index.enquire.collapse_key = value
+        end
+      end
+      true
     end
   end
 end
