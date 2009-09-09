@@ -13,7 +13,6 @@ module ActsAsXapian
     def matches(reload = false)
       return @matches unless @matches.nil? || reload
 
-      @retry = true
       begin
         self.runtime += Benchmark::realtime do
           # If using find_options conditions have Xapian return the entire match set
@@ -21,12 +20,14 @@ module ActsAsXapian
           @matches = @index.enquire.mset(@postpone_limit ? 0 : @offset, @postpone_limit ? @@unlimited : @limit, @check_at_least)
         end
         @matches
-      rescue DatabaseModifiedError => e
-        if @retry
-          @retry = false
-          @index.reset_enquire!
-          initialize_enquire
-          retry
+      rescue IOError => e
+        if /DatabaseModifiedError/.match(e.message.to_s)
+          if @retried.nil?
+            @retried = true
+            @index.reset_enquire!
+            initialize_enquire
+            retry
+          end
         end
         raise e
       end
