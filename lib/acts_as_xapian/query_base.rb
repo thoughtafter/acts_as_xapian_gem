@@ -21,13 +21,11 @@ module ActsAsXapian
         end
         @matches
       rescue IOError => e
-        if /DatabaseModifiedError/.match(e.message.to_s)
-          if @retried.nil?
-            @retried = true
-            @index.reset_enquire!
-            initialize_enquire
-            retry
-          end
+        if @retried.nil? && /DatabaseModifiedError/.match(e.message.to_s)
+          @retried = true
+          @index.reset_enquire!
+          initialize_enquire
+          retry
         end
         raise e
       end
