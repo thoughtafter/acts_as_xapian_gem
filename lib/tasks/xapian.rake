@@ -2,7 +2,7 @@ require 'rubygems'
 require 'rake'
 require 'rake/testtask'
 require 'active_record'
-require File.dirname(__FILE__) + '/../lib/acts_as_xapian.rb'
+require File.dirname(__FILE__) + '/../acts_as_xapian.rb'
 
 namespace :xapian do
     # Parameters - specify "flush=true" to save changes to the Xapian database
