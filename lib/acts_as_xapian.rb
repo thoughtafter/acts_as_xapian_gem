@@ -1,8 +1,3 @@
-require File.join(File.dirname(__FILE__), 'acts_as_xapian', 'base')
-require File.join(File.dirname(__FILE__), 'acts_as_xapian', 'query_base')
-require File.join(File.dirname(__FILE__), 'acts_as_xapian', 'search')
-require File.join(File.dirname(__FILE__), 'acts_as_xapian', 'similar')
-require File.join(File.dirname(__FILE__), 'acts_as_xapian', 'index')
-require File.join(File.dirname(__FILE__), 'acts_as_xapian', 'writable_index')
-require File.join(File.dirname(__FILE__), 'acts_as_xapian', 'readable_index')
-require File.join(File.dirname(__FILE__), 'acts_as_xapian', 'core_ext/array')
+%w(base query_base search similar index writable_index readable_index core_ext/array).each do |file|
+	require File.join(File.dirname(__FILE__), 'acts_as_xapian', file)
+end
