@@ -45,7 +45,7 @@ Gem::Specification.new do |s|
   s.rdoc_options = ["--charset=UTF-8"]
   s.require_paths = ["lib"]
   s.rubygems_version = %q{1.3.5}
-  s.summary = %q{A gem for interacting with the Xapian full text search engine}
+  s.summary = %q{A gem for interacting with the Xapian full text search engine. Based on the acts_as_xapian plugin.}
   s.test_files = [
     "spec/acts_as_xapian_spec.rb",
      "spec/spec_helper.rb"
