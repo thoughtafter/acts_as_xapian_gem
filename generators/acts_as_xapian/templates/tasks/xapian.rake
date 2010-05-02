@@ -11,7 +11,11 @@ namespace :xapian do
 
     desc 'Pulls all the xapian models from either the params or the project itself'
     task :retrieve_models => :environment do 
-      @models = (ENV['models'] || ENV['m']) && (ENV['models'] || ENV['m']).split(" ").map{|m| m.constantize} || ActiveRecord::Base.send(:subclasses).select{|klazz| klazz.respond_to?(:xapian?)}
+      @models = (ENV['models'] || ENV['m']) && (ENV['models'] || ENV['m']).split(" ").map{|m| m.constantize} || nil
+			if @models.nil? 
+				Dir.glob(RAILS_ROOT + '/app/models/*.rb').each { |file| require file }
+				@models = ActiveRecord::Base.send(:subclasses).select{|klazz| klazz.respond_to?(:xapian?)}
+			end
       STDOUT.puts("Found Xapian Models: #{@models.map(&:name).join(', ')}")
     end
     # Parameters - specify 'models="PublicBody User"' to say which models
