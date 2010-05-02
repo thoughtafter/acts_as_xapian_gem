@@ -23,6 +23,7 @@ Gem::Specification.new do |s|
      "README.rdoc",
      "Rakefile",
      "VERSION",
+     "acts_as_xapian-0.1.2.gem",
      "acts_as_xapian.gemspec",
      "generators/acts_as_xapian/USAGE",
      "generators/acts_as_xapian/acts_as_xapian_generator.rb",
