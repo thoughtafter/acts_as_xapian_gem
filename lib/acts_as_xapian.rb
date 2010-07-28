@@ -107,7 +107,7 @@ module ActsAsXapian
 
     #this method should return true if the integration of xapian on self is complete
     def xapian?
-      self.included_modules.include?(InstanceMethods) && self.singleton_class.ancestors.include?(ClassMethods)
+      self.included_modules.include?(InstanceMethods) && (class << self; included_modules.include?(ClassMethods); end)
     end
   end
 
