@@ -22,7 +22,7 @@ module ActsAsXapian
         raise "Set RAILS_ENV, so acts_as_xapian can find the right Xapian database" unless environment
 
         # check for a config file
-        config_file = Rails.root + "/config/xapian.yml"
+        config_file = Rails.root + "config/xapian.yml"
         @@config = File.exists?(config_file) ? YAML.load_file(config_file)[environment] : {}
 
         # figure out where the DBs should go
